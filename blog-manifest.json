@@ -1,0 +1,16 @@
+{
+  "id": "roche-blog",
+  "name": "角色網誌",
+  "version": "1.0.0",
+  "description": "偷看 TA 的私人網誌：AI 依據角色完整人設生成深度長文",
+  "author": "予佟",
+  "entry": "plugin.js",
+  "hash": "",
+  "permissions": [
+    "storage",
+    "ui",
+    "character:read",
+    "persona:read",
+    "memory:read"
+  ]
+}
