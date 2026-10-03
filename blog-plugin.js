@@ -14,7 +14,7 @@ const app={
 
     // ── State ──
     const S={
-      showSettings:false,generating:false,
+      showSettings:false,generating:false,generatingComments:false,
       posts:[],   // [{title,content,mood,date,tags,wordCount}]
       cfg:{charId:'',charName:'',convId:'',userName:'',genCount:1,blogStyle:'personal'},
       charList:[],convList:[],
@@ -225,6 +225,35 @@ const app={
       S.generating=false;render();
     }
 
+    // ═══ 生成評論（路人 + 其他 char）═══
+    async function genComments(post){
+      if(S.generatingComments)return;S.generatingComments=true;render();
+      const name=cn();
+      // 取所有其他 char 名字，讓 AI 可以讓他們來評論
+      const otherChars=S.charList.filter(c=>c.id!==S.cfg.charId).map(c=>c.name||c.handle).filter(Boolean);
+
+      const sys=`你是網誌評論區模擬器。針對一篇 blog 文章生成真實的讀者評論。
+規則：
+- 混合兩種評論者：
+  A) 路人讀者（佔 60-70%）：用暱稱，像真實 blog 留言——有的深度回應、有的簡短共鳴、有的提問、有的分享自己的經歷、偶爾有友善的不同觀點
+  B) 認識作者的人（佔 30-40%）：${otherChars.length?'可以從以下角色中選 1-2 個來留言：'+otherChars.join('、')+'。他們的留言要像認識作者的人，語氣更親近，可能調侃、關心、或回應文中某個他們知道的細節':'用虛構的朋友名字，語氣像認識作者的人'}
+- 評論長度差異大：有些一句話（「寫得真好」「被你說哭了」），有些是一小段回應
+- 部分評論可以有 1 則作者本人「${name}」的簡短回覆（reply），語氣要符合角色個性
+- 所有評論內容必須 SFW，不涉及任何敏感話題
+- 只回 JSON 陣列
+- 格式：[{"author":"名稱","isChar":false,"text":"留言","likes":5,"reply":{"author":"${name}","text":"回覆","likes":2}}]
+- reply 欄位可省略。isChar 為 true 代表是認識作者的角色`;
+
+      const p=`文章標題：「${post.title}」\n文章節選：${(post.content||'').slice(0,300)}\n\n生成 6-8 則評論。`;
+      try{
+        const raw=await callAI(p,sys);let arr=parseJSON(raw);
+        if(!arr||!Array.isArray(arr))throw new Error('評論解析失敗');
+        post.comments=arr;post.commentCount=arr.reduce((s,c)=>s+1+(c.reply?1:0),0);
+        savePosts();toast('💬 '+arr.length+' 則評論');
+      }catch(e){toast('⚠ 評論生成失敗：'+e.message);}
+      S.generatingComments=false;render();
+    }
+
     // ── Style ──
     const style=document.createElement('style');
     style.textContent=`
@@ -269,6 +298,18 @@ const app={
       .bg-style-btn.on{border-color:${ACC};background:${ACCL};color:${ACC}}
       .bg-style-label{font-weight:600}
       .bg-style-desc{font-size:10px;color:${T3};margin-top:2px}
+      .bg-cm{border-top:1px solid ${BD};padding:16px 0}
+      .bg-cm-hdr{font-weight:700;font-size:14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+      .bg-cm-item{margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid ${BD}}
+      .bg-cm-item:last-child{border-bottom:none}
+      .bg-cm-author{font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px}
+      .bg-cm-char-badge{font-size:10px;background:${ACCL};color:${ACC};padding:1px 6px;border-radius:4px}
+      .bg-cm-text{font-size:14px;line-height:1.6;margin-top:4px;color:${T1}}
+      .bg-cm-meta{font-size:11px;color:${T3};margin-top:4px;font-family:-apple-system,sans-serif}
+      .bg-cm-reply{margin:8px 0 0 16px;padding:10px 12px;background:#f8f8f8;border-radius:8px;border-left:3px solid ${ACC}}
+      .bg-cm-reply-author{font-weight:600;font-size:12px;color:${ACC}}
+      .bg-cm-reply-text{font-size:13px;line-height:1.5;margin-top:2px;color:${T2}}
+      .bg-cm-gen{width:100%;padding:12px;border-radius:12px;background:#f5f5f5;border:1px solid ${BD};color:${T2};font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-family:-apple-system,sans-serif;margin-top:8px}
       .bg-toast{position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;padding:8px 18px;border-radius:20px;font-size:13px;z-index:300;pointer-events:none;font-family:-apple-system,sans-serif;animation:bf .3s}
       @keyframes bf{from{opacity:0;transform:translateX(-50%) translateY(-8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
     `;
@@ -310,7 +351,20 @@ const app={
     }
 
     function vDetail(p){
-      return `<div class="bg-dt"><div class="bg-hdr" style="border-bottom:1px solid ${BD}"><button class="bg-hdr-btn" data-a="close-dt"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button><span style="font-weight:700;font-size:14px">${esc(cn())} 的網誌</span><div style="width:34px"></div></div><div style="flex:1;overflow-y:auto"><div class="bg-dt-body"><div class="bg-dt-date">${esc(p.date)} · ${esc(p.styleLabel||'')}</div><div class="bg-dt-title">${esc(p.title)}</div>${p.mood?`<div class="bg-dt-mood">${esc(p.mood)}</div>`:''}<div class="bg-dt-content">${esc(p.content)}</div>${p.tags?.length?`<div class="bg-dt-tags">${p.tags.map(t=>`<span>#${esc(t)}</span>`).join('')}</div>`:''}<div class="bg-dt-wc">${p.wordCount||0} 字</div></div></div></div>`;
+      const idx=S.posts.indexOf(p);
+      let cmHTML=`<div class="bg-cm"><div class="bg-cm-hdr"><span>💬 評論 ${p.commentCount||0}</span></div>`;
+      if(p.comments&&p.comments.length){
+        p.comments.forEach(c=>{
+          cmHTML+=`<div class="bg-cm-item"><div class="bg-cm-author">${esc(c.author)}${c.isChar?`<span class="bg-cm-char-badge">角色</span>`:''}</div><div class="bg-cm-text">${esc(c.text)}</div><div class="bg-cm-meta">❤️ ${c.likes||0}</div>`;
+          if(c.reply){cmHTML+=`<div class="bg-cm-reply"><div class="bg-cm-reply-author">${esc(c.reply.author)} 回覆</div><div class="bg-cm-reply-text">${esc(c.reply.text)}</div></div>`;}
+          cmHTML+=`</div>`;
+        });
+        cmHTML+=`<button class="bg-cm-gen" data-a="gen-comments" data-i="${idx}" ${S.generatingComments?'disabled':''}>${S.generatingComments?'⏳ 生成中...':'🔄 重新生成評論'}</button>`;
+      }else{
+        cmHTML+=`<button class="bg-cm-gen" data-a="gen-comments" data-i="${idx}" ${S.generatingComments?'disabled':''}>${S.generatingComments?'⏳ 生成中...':'💬 生成評論區'}</button>`;
+      }
+      cmHTML+=`</div>`;
+      return `<div class="bg-dt"><div class="bg-hdr" style="border-bottom:1px solid ${BD}"><button class="bg-hdr-btn" data-a="close-dt"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button><span style="font-weight:700;font-size:14px">${esc(cn())} 的網誌</span><div style="width:34px"></div></div><div style="flex:1;overflow-y:auto"><div class="bg-dt-body"><div class="bg-dt-date">${esc(p.date)} · ${esc(p.styleLabel||'')}</div><div class="bg-dt-title">${esc(p.title)}</div>${p.mood?`<div class="bg-dt-mood">${esc(p.mood)}</div>`:''}<div class="bg-dt-content">${esc(p.content)}</div>${p.tags?.length?`<div class="bg-dt-tags">${p.tags.map(t=>`<span>#${esc(t)}</span>`).join('')}</div>`:''}<div class="bg-dt-wc">${p.wordCount||0} 字</div>${cmHTML}</div></div></div>`;
     }
 
     function vSettings(){
@@ -336,6 +390,7 @@ const app={
       else if(a==='settings'){S.showSettings=true;render();}
       else if(a==='close-set'){S.showSettings=false;render();}
       else if(a==='close-dt'){S.detailIdx=null;render();}
+      else if(a==='gen-comments'){const i=parseInt(b.dataset.i);if(!isNaN(i)&&S.posts[i])genComments(S.posts[i]);}
       else if(a==='gen-blog'){genBlog();}
       else if(a==='open'){const i=parseInt(b.dataset.i);if(!isNaN(i)&&S.posts[i]){S.detailIdx=i;render();}}
       else if(a==='set-style'){S.cfg.blogStyle=b.dataset.style;render();}
