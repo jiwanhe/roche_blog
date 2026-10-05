@@ -46,84 +46,13 @@ const app={
     // ── 日期工具 ──
     function ds(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 
-    // ══════════════════════════════════════════
-    //  敏感字詞清洗層（核心防護）
-    // ══════════════════════════════════════════
-    const SANITIZE_PATTERNS = [
-      // 性行為相關（繁+簡）
-      /高潮|做愛|做爱|性交|口交|肛交|自慰|手淫|勃起|射精|內射|内射|外射|潮吹|性愛|性爱|性慾|性欲|性癖|性奴|性虐|淫|慾火|欲火|肉體|肉体|裸體|裸体|裸露/g,
-      // BDSM / 調教（繁+簡）
-      /調教|绑缚|綁縛|繩縛|绳缚|繩藝|绳艺|捆綁|捆绑|鞭打|掌摑|掌掴|窒息|SM|BDSM|Dom|Sub|主奴|奴隸|奴隶|項圈|项圈|choker|皮鞭|蠟燭|蜡烛|夾子|口塞|口枷|束縛|束缚|受虐|施虐|臣服/gi,
-      // 身體敏感部位（繁+簡）
-      /陰莖|阴茎|陰道|阴道|陰蒂|阴蒂|乳頭|乳头|乳房|胸部|私處|私处|下體|下体|龜頭|龟头|睪丸|睾丸|子宮|子宫|G點|G点|前列腺|肛門|肛门|會陰|会阴/g,
-      // 性玩具 / 情趣用品（繁+簡）
-      /跳蛋|按摩棒|飛機杯|飞机杯|情趣|潤滑|润滑|避孕套|保險套|保险套|縮陰球|缩阴球|震動|震动|假陽具|假阳具|肛塞|尿道/g,
-      // 親密行為描述（繁+簡）
-      /插入|抽插|深入|舔|吸吮|撫摸私|抚摸私|愛撫|爱抚|前戲|前戏|後入|后入|騎乘|骑乘|體位|体位|69|口爆|顏射|颜射|吞精|精液|體液|体液/g,
-      // 毒品 / 違法
-      /毒品|大麻|可卡因|海洛因|冰毒|搖頭丸|迷藥|迷姦|強姦|強暴|性侵|猥褻/g,
-      // 自殘 / 極端
-      /自殺|自殘|割腕|跳樓|上吊|服毒/g,
-    ];
 
-    // 額外模式：整句刪除（如果一整句主要在描述性行為/調教場景）
-    const SENTENCE_KILL_PATTERNS = [
-      /引發.*連續.*高潮/,
-      /施以.*深度.*調教/,
-      /完成.*內射/,
-      /邊緣控制/,
-      /主導了.*調教/,
-      /掌摑與/,
-      /言語羞辱/,
-      /深度調教/,
-      /求歡/,/求欢/,
-      /難耐渴求/,
-      /情趣.*體驗/,/情趣.*体验/,
-      /私密.*攝影/,/私密.*摄影/,
-      /皮質.*choker/i,/皮质.*choker/i,
-      /下单.*绳艺/,/下單.*繩藝/,
-      /训练器/,/訓練器/,
-      /私密.*体验课/,/私密.*體驗課/,
-    ];
-
-    function sanitizeText(text){
-      if(!text)return '';
-      let cleaned = String(text);
-      // 1. 整句刪除：如果句子命中刪句模式，直接移除整句
-      const sentences = cleaned.split(/[。！？\n]+/);
-      const safeSentences = sentences.filter(s => {
-        const trimmed = s.trim();
-        if(!trimmed) return true;
-        return !SENTENCE_KILL_PATTERNS.some(p => p.test(trimmed));
-      });
-      cleaned = safeSentences.join('。');
-      // 2. 關鍵詞替換：殘留的敏感詞替換成 ***
-      SANITIZE_PATTERNS.forEach(p => {
-        cleaned = cleaned.replace(p, '***');
-      });
-      // 3. 清理連續 *** 和多餘標點
-      cleaned = cleaned.replace(/(\*{3}[，、。；：\s]*){2,}/g, '（私密內容已略）');
-      cleaned = cleaned.replace(/\*{3}/g, '');
-      // 4. 清理多餘空行
-      cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
-      return cleaned;
-    }
-
-    // 清洗 persona 文本（角色卡裡也可能有敏感內容）
-    function sanitizePersona(persona){
-      if(!persona)return '';
-      let cleaned = sanitizeText(persona);
-      // 額外：移除角色卡裡常見的 NSFW 區塊標記
-      cleaned = cleaned.replace(/\[NSFW[^\]]*\][\s\S]*?\[\/NSFW\]/gi, '（私密設定已略）');
-      cleaned = cleaned.replace(/<nsfw[^>]*>[\s\S]*?<\/nsfw>/gi, '（私密設定已略）');
-      return cleaned;
-    }
 
     // ── 自動抓取角色資料（含清洗）──
     async function fetchChar(){
       S.autoFetching=true;render();
       try{
-        const im={importedAt:Date.now(),persona:'',personaClean:'',bio:'',coreSummary:'',coreSummaryClean:'',factMemories:[],factMemoriesClean:[],recentMessages:[],recentMessagesClean:[],name:'',handle:''};
+        const im={importedAt:Date.now(),persona:'',bio:'',coreSummary:'',factMemories:[],recentMessages:[],name:'',handle:''};
         const cid=S.cfg.charId;
         if(cid){try{const f=await roche.character.get(cid);if(f){im.name=f.name||f.handle||'';im.handle=f.handle||'';im.persona=f.persona||'';im.bio=f.bio||'';}}catch(_){}}
         if(!im.name){const ch=S.charList.find(c=>c.id===cid);if(ch)im.name=ch.name||ch.handle||'';}
@@ -132,24 +61,24 @@ const app={
           if(ltm?.core?.length)im.coreSummary=ltm.core.map(c=>c.summary||'').filter(Boolean).join('\n\n');
           if(ltm?.facts?.length)im.factMemories=ltm.facts.slice(0,10).map(f=>(f.action||'').slice(0,200)).filter(Boolean);
         }catch(_){}
-        try{
-          const stm=await roche.memory.getShortTerm();
-          if(Array.isArray(stm))im.recentMessages=stm.filter(m=>!m.isMe&&m.text).slice(-20).map(m=>m.text);
-        }catch(_){}
-
-        // 清洗版本（送 API 用）
-        im.personaClean=sanitizePersona(im.persona);
-        im.coreSummaryClean=sanitizeText(im.coreSummary);
-        im.factMemoriesClean=im.factMemories.map(f=>sanitizeText(f)).filter(t=>t.length>10); // 太短的清洗後沒意義就丟掉
-        im.recentMessagesClean=im.recentMessages.map(m=>sanitizeText(m)).filter(t=>t.length>5);
-
+        // getShortTerm：逐對話抓取（個聊+群聊）
+        const allMsgs=[];
+        const charConvs=S.convList.filter(c=>{const ci=c.contactId||'';const ps=c.participants||[];return ci===cid||ps.includes(cid)||(c.conversationId||c.id)===cid;});
+        if(charConvs.length){
+          for(const conv of charConvs){
+            try{const stm=await roche.memory.getShortTerm({conversationId:conv.conversationId||conv.id});if(Array.isArray(stm))allMsgs.push(...stm.filter(m=>!m.isMe&&m.text));}
+            catch(_){if(!allMsgs.length){try{const stm=await roche.memory.getShortTerm();if(Array.isArray(stm))allMsgs.push(...stm.filter(m=>!m.isMe&&m.text));}catch(_2){}}break;}
+          }
+        }else{try{const stm=await roche.memory.getShortTerm();if(Array.isArray(stm))allMsgs.push(...stm.filter(m=>!m.isMe&&m.text));}catch(_){}}
+        allMsgs.sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
+        const seen=new Set();
+        im.recentMessages=allMsgs.filter(m=>{const k=m.text.slice(0,50);if(seen.has(k))return false;seen.add(k);return true;}).slice(-30).map(m=>m.text);
         if(im.name||im.persona||im.coreSummary){
           S.imported=im;await saveImported();
           if(!S.cfg.charName)S.cfg.charName=im.name;
           toast('✨ 已抓取 '+im.name);
-          const rawLen=im.persona.length+im.coreSummary.length;
-          const cleanLen=im.personaClean.length+im.coreSummaryClean.length;
-          S.importMsg=`原始 ${rawLen} 字 → 清洗後 ${cleanLen} 字（過濾 ${rawLen-cleanLen} 字敏感內容）\n記憶 ${im.factMemoriesClean.length}/${im.factMemories.length} 筆保留　語氣 ${im.recentMessagesClean.length} 則`;
+                    const convCount=charConvs.length||1;
+          S.importMsg=`原始 ${rawLen} 字 → 清洗後 ${cleanLen} 字（過濾 ${0} 字）\n記憶 ${im.factMemories.length}/${im.factMemories.length} 筆　語氣 ${im.recentMessages.length} 則（${convCount}個對話）`;
           S.importErr=false;
         }else{S.importMsg='沒有抓到資料';S.importErr=true;}
       }catch(e){S.importMsg='失敗：'+e.message;S.importErr=true;}
@@ -157,13 +86,13 @@ const app={
     }
 
     // ── 建構 prompt context（只用清洗後的版本）──
-    function buildCleanContext(){
+    function buildContext(){
       const im=S.imported;if(!im)return '';
       let c='';
-      if(im.personaClean)c+=`\n【角色人設（已過濾敏感內容）】\n${im.personaClean}\n`;
-      if(im.coreSummaryClean)c+=`\n【角色近況摘要】\n${im.coreSummaryClean}\n`;
-      if(im.factMemoriesClean?.length)c+=`\n【近期事件】\n${im.factMemoriesClean.map((f,i)=>`${i+1}. ${f}`).join('\n')}\n`;
-      if(im.recentMessagesClean?.length)c+=`\n【角色說話風格參考】\n${im.recentMessagesClean.slice(-8).map(t=>'- '+t).join('\n')}\n`;
+      if(im.persona)c+=`\n【角色人設】\n${im.persona}\n`;
+      if(im.coreSummary)c+=`\n【角色近況摘要】\n${im.coreSummary}\n`;
+      if(im.factMemories?.length)c+=`\n【近期事件】\n${im.factMemories.map((f,i)=>`${i+1}. ${f}`).join('\n')}\n`;
+      if(im.recentMessages?.length)c+=`\n【角色說話風格參考】\n${im.recentMessages.slice(-8).map(t=>'- '+t).join('\n')}\n`;
       return c;
     }
 
@@ -187,7 +116,7 @@ const app={
     // ═══ 生成網誌 ═══
     async function genBlog(){
       if(S.generating)return;S.generating=true;S.lastError='';render();
-      const name=cn(),ctx=buildCleanContext();
+      const name=cn(),ctx=buildContext();
       const styleKey=S.cfg.blogStyle||'personal';
       const styleDef=BLOG_STYLES[styleKey]||BLOG_STYLES.personal;
 
@@ -372,7 +301,7 @@ const app={
       let h=`<div class="bg-mask"><div class="bg-set"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span style="font-weight:700;font-size:15px">設定</span><button data-a="close-set" style="background:none;border:none;font-size:18px;color:${T3};cursor:pointer">✕</button></div>`;
       h+=`<label class="bg-sl">偷看誰的網誌？</label><select class="bg-si" data-f="charId">${S.charList.map(ch=>`<option value="${esc(ch.id)}" ${ch.id===c.charId?'selected':''}>${esc(ch.name||ch.handle)}</option>`).join('')}</select>`;
       h+=`<label class="bg-sl">文章風格</label><div class="bg-styles">${Object.entries(BLOG_STYLES).map(([k,v])=>`<div class="bg-style-btn ${k===(c.blogStyle||'personal')?'on':''}" data-a="set-style" data-style="${k}"><div class="bg-style-label">${v.label}</div><div class="bg-style-desc">${v.desc}</div></div>`).join('')}</div>`;
-      h+=`<button data-a="fetch-char" class="bg-sbtn" style="background:#333;margin-top:12px" ${S.autoFetching?'disabled':''}>${S.autoFetching?'⏳ 抓取中...':'🚀 自動抓取角色資料（含敏感內容過濾）'}</button>`;
+      h+=`<button data-a="fetch-char" class="bg-sbtn" style="background:#333;margin-top:12px" ${S.autoFetching?'disabled':''}>${S.autoFetching?'⏳ 抓取中...':'🚀 自動抓取角色資料'}</button>`;
       if(S.imported){
         h+=`<div style="font-size:11px;color:${T2};background:#f5f5f5;border-radius:8px;padding:8px;margin-top:8px">已抓取：<strong>${esc(S.imported.name)}</strong><br>${esc(S.importMsg||'')}</div>`;
       }
