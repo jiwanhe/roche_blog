@@ -16,7 +16,7 @@ const app={
     const S={
       showSettings:false,generating:false,generatingComments:false,
       posts:[],   // [{title,content,mood,date,tags,wordCount}]
-      cfg:{charId:'',charName:'',convId:'',userName:'',genCount:1,blogStyle:'personal'},
+      cfg:{charId:'',charName:'',convId:'',userName:'',genCount:1,blogStyle:'personal',selectedConvIds:[]},
       charList:[],convList:[],
       imported:null,importMsg:'',importErr:false,
       lastError:'',autoFetching:false,
@@ -63,7 +63,7 @@ const app={
         }catch(_){}
         // getShortTerm：逐對話抓取（個聊+群聊）
         const allMsgs=[];
-        const charConvs=S.convList.filter(c=>{const ci=c.contactId||'';const ps=c.participants||[];return ci===cid||ps.includes(cid)||(c.conversationId||c.id)===cid;});
+        const charConvs=S.convList.filter(c=>{const convId=c.conversationId||c.id||'';const ci=c.contactId||'';const ps=c.participants||[];return ci===cid||ps.includes(cid)||convId===cid||convId.startsWith('group_');});
         if(charConvs.length){
           for(const conv of charConvs){
             try{const stm=await roche.memory.getShortTerm({conversationId:conv.conversationId||conv.id});if(Array.isArray(stm))allMsgs.push(...stm.filter(m=>!m.isMe&&m.text));}
@@ -346,5 +346,5 @@ const app={
     container.replaceChildren();
   }
 };
-window.RochePlugin.register({id:'roche-blog',name:'角色網誌',version:'1.0.0',description:'偷看 TA 的私人網誌',author:'予佟',apps:[app]});
+window.RochePlugin.register({id:'roche-blog',name:'角色網誌',version:'2.0.0',description:'偷看 TA 的私人網誌',author:'予佟',apps:[app]});
 })();
